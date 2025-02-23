@@ -65,7 +65,7 @@ int add_task(char* task_content){
         fprintf(file, "  \"status\": %d\n", task.status);
         fprintf(file, "}\n]");
         fclose(file);
-        printf("Student JSON data written to data.json\n");
+        printf("Task JSON data written to data.json\n");
     }
     else{
         fseek(file,-2,SEEK_END);
@@ -75,7 +75,7 @@ int add_task(char* task_content){
         fprintf(file, "  \"status\": %d\n", task.status);
         fprintf(file, "}\n]");
         fclose(file);
-        printf("Student JSON data written to data.json\n");
+        printf("Task JSON data written to data.json\n");
     }
 }
 
