@@ -4,10 +4,11 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <sqlite3.h>
 
 struct Task{
     unsigned int uid;
-    char* desc[100];
+    const char* desc[100];
     bool status;
 };
 
@@ -28,55 +29,111 @@ unsigned long long generate_uid(){
     srand(time(0) ^ getpid());
     return ((unsigned long long)time(0) << 20) | (getpid() << 8) | (rand() & 0xFF); //returns a 64-bit unique id
 }
-int is_json_empty(){
-    FILE* file = fopen("data.json", "r");
-    if (file == NULL)
+static int callback(void* NotUsed, int argc, char* argv[], char* azColName[]){
+    for (int i = 0; i < argc; i++)
     {
-        return -1;
+        printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
     }
-    fseek(file, 0, SEEK_END);
-    long size = ftell(file);
-    fclose(file);
-    return (size == 0);
+    printf("\n");
+    return 0;
+    
 }
-int add_task(char* task_content){
-    // printf("Added task: %s\n", task);
-    unsigned long long uid = generate_uid();
-    struct Task task = {uid,task_content,false};
-    FILE* file = fopen("data.json", "r+");
-    if (file == NULL) {
-        file = fopen("data.json", "w");
-        if (file == NULL) {
-            printf("Error creating file!\n");
-            return 1;
-        }
-        fprintf(file, "[{\n");
-        fprintf(file, "  \"task\": \"%s\",\n", *task.desc);
-        fprintf(file, "  \"uid\": %u,\n", task.uid);
-        fprintf(file, "  \"status\": %d\n", task.status);
-        fprintf(file, "}\n]");
-        fclose(file);
-    }
-    if (is_json_empty())
+
+// int is_json_empty(){
+//     FILE* file = fopen("data.json", "r");
+//     if (file == NULL)
+//     {
+//         return -1;
+//     }
+//     fseek(file, 0, SEEK_END);
+//     long size = ftell(file);
+//     fclose(file);
+//     return (size == 0);
+// }
+
+// int add_task(char* task_content){
+//     // printf("Added task: %s\n", task);
+//     unsigned long long uid = generate_uid();
+//     struct Task task = {uid,task_content,false};
+//     FILE* file = fopen("data.json", "r+");
+//     if (file == NULL) {
+//         file = fopen("data.json", "w");
+//         if (file == NULL) {
+//             printf("Error creating file!\n");
+//             return 1;
+//         }
+//         fprintf(file, "[{\n");
+//         fprintf(file, "  \"task\": \"%s\",\n", *task.desc);
+//         fprintf(file, "  \"uid\": %u,\n", task.uid);
+//         fprintf(file, "  \"status\": %d\n", task.status);
+//         fprintf(file, "}\n]");
+//         fclose(file);
+//     }
+//     if (is_json_empty())
+//     {
+//         fprintf(file, "[{\n");
+//         fprintf(file, "  \"task\": \"%s\",\n", *task.desc);
+//         fprintf(file, "  \"uid\": %u,\n", task.uid);
+//         fprintf(file, "  \"status\": %d\n", task.status);
+//         fprintf(file, "}\n]");
+//         fclose(file);
+//         printf("Task JSON data written to data.json\n");
+//     }
+//     else{
+//         fseek(file,-2,SEEK_END);
+//         fprintf(file, ",\n {\n");
+//         fprintf(file, "  \"task\": \"%s\",\n", *task.desc);
+//         fprintf(file, "  \"uid\": %u,\n", task.uid);
+//         fprintf(file, "  \"status\": %d\n", task.status);
+//         fprintf(file, "}\n]");
+//         fclose(file);
+//         printf("Task JSON data written to data.json\n");
+//     }
+// }
+
+int add_task(char* task){
+    sqlite3* db;
+    char* zErrMsg = 0;
+    int rc = sqlite3_open("data.db", &db);
+
+    if (rc)
     {
-        fprintf(file, "[{\n");
-        fprintf(file, "  \"task\": \"%s\",\n", *task.desc);
-        fprintf(file, "  \"uid\": %u,\n", task.uid);
-        fprintf(file, "  \"status\": %d\n", task.status);
-        fprintf(file, "}\n]");
-        fclose(file);
-        printf("Task JSON data written to data.json\n");
+        fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
+        sqlite3_close(db);
+        return(1);
     }
-    else{
-        fseek(file,-2,SEEK_END);
-        fprintf(file, ",\n {\n");
-        fprintf(file, "  \"task\": \"%s\",\n", *task.desc);
-        fprintf(file, "  \"uid\": %u,\n", task.uid);
-        fprintf(file, "  \"status\": %d\n", task.status);
-        fprintf(file, "}\n]");
-        fclose(file);
-        printf("Task JSON data written to data.json\n");
+
+    const char *sql = "INSERT INTO tasks (uid, desc, status) VALUES (?, ?, ?);";
+    sqlite3_stmt *stmt;
+
+    if (sqlite3_prepare_v2(db,sql,-1,&stmt,0))
+    {
+        printf("SQL error: %s\n", sqlite3_errmsg(db));
+        return 1;
     }
+
+    unsigned long long uid = generate_uid();
+    struct Task generated_task = {uid, task, false};
+    sqlite3_bind_int(stmt,1,generated_task.uid);
+    sqlite3_bind_text(stmt,2,*generated_task.desc,-1,SQLITE_STATIC);
+    sqlite3_bind_int(stmt,3,generated_task.status);
+
+    if (sqlite3_step(stmt) != SQLITE_DONE)
+    {
+        printf("Failed to insert task: %s\n", sqlite3_errmsg(db));
+    } else{
+        printf("Task inserted successfully!\n");
+    }
+
+    sqlite3_finalize(stmt);
+
+    if (rc = SQLITE_OK)
+    {
+        fprintf(stderr, "SQL error: %s\n", zErrMsg);
+        sqlite3_free(zErrMsg);
+    }
+    
+    sqlite3_close(db);
 }
 
 void delete_task(char* task){
