@@ -8,7 +8,7 @@
 
 struct Task{
     unsigned int uid;
-    const char* desc[100];
+    char* desc[100];
     bool status;
 };
 
@@ -18,12 +18,21 @@ typedef struct {
     char* desc;
 } CLI_Argument;
 
+/*
+CREATE TABLE tasks (
+    uid INTEGER PRIMARY KEY,
+    desc TEXT NOT NULL,
+    status INTEGER NOT NULL
+);
+*/
+
 CLI_Argument cli_args[] = {
     {1,"add", "Add a new task"},
     {2,"remove", "Remove a task"},
     {3,"list", "List all tasks"},
     {4,"complete", "Mark a task as done"},
-    {5,"help", "Show available commands"}                 
+    {5,"help", "Show available commands"},
+    {6,"search", "Search tasks using a keyword"}                 
 };
 unsigned long long generate_uid(){
     srand(time(0) ^ getpid());
@@ -132,22 +141,103 @@ int add_task(char* task){
         fprintf(stderr, "SQL error: %s\n", zErrMsg);
         sqlite3_free(zErrMsg);
     }
-    
+
     sqlite3_close(db);
 }
+int search_task(char *task_keyword){
+    sqlite3* db;
+    char* zErrMsg = 0;
+    int rc = sqlite3_open("data.db", &db);
 
+    if (rc)
+    {
+        fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
+        sqlite3_close(db);
+        return(1);
+    }
+
+    const char *sql = "SELECT * FROM tasks WHERE desc LIKE ?;";
+    sqlite3_stmt *stmt;
+
+    if (sqlite3_prepare_v2(db,sql,-1,&stmt,0))
+    {
+        printf("SQL error: %s\n", sqlite3_errmsg(db));
+        return 1;
+    }
+
+    char search_pattern[110];
+    snprintf(search_pattern, sizeof(search_pattern), "%%%s%%", task_keyword);
+    sqlite3_bind_text(stmt,2,search_pattern,-1,SQLITE_STATIC);
+
+    int found = 0;
+    while (sqlite3_step(stmt) == SQLITE_ROW)
+    {
+        struct Task task;
+        task.uid = sqlite3_column_int(stmt,0);
+        snprintf(*task.desc,sizeof(task.desc),"%s", sqlite3_column_text(stmt,1));
+        task.status = sqlite3_column_int(stmt,2);
+        printf("Task Found:\n");
+        printf("UID: %d\n", task.uid);
+        printf("Description: %s\n", *task.desc);
+        printf("Status: %d\n", task.status);
+        found = 1;
+    }
+    if (!found) {
+        printf("No task found with description containing: %s\n", task_keyword);
+    }
+
+    sqlite3_finalize(stmt);
+
+    if (rc = SQLITE_OK)
+    {
+        fprintf(stderr, "SQL error: %s\n", zErrMsg);
+        sqlite3_free(zErrMsg);
+    }
+
+    sqlite3_close(db);
+}
 void delete_task(char* task){
-    printf("deleting task: %s\n", task);
 }
 
 void update_task(char* task){
     printf("Marking task: %s as complete\n", task);
 }
 
-void list_tasks(){
-    printf("listing tasks\n");
-}
+int list_tasks() {
+    sqlite3 *db;
+    sqlite3_stmt *stmt;
+    char *zErrMsg = 0;
+    int rc;
 
+    rc = sqlite3_open("data.db", &db);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
+        return 1;
+    }
+
+    const char *sql = "SELECT * FROM tasks;";
+    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, 0);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "SQL error: %s\n", sqlite3_errmsg(db));
+        sqlite3_close(db);
+        return 1;
+    }
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        struct Task task;
+        task.uid = sqlite3_column_int(stmt, 0);
+        snprintf(task.desc, sizeof(task.desc), "%s", (const char *)sqlite3_column_text(stmt, 1));
+        task.status = sqlite3_column_int(stmt, 2);
+        printf("Task Found:\n");
+        printf("UID: %d\n", task.uid);
+        printf("Description: %s\n", task.desc);
+        printf("Status: %d\n", task.status);
+    }
+
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return 0;
+}
 void help(){
     for (int i = 0; i < 5; i++)
     {
@@ -158,7 +248,7 @@ void help(){
 
 
 void parse_args(char* arg, char* task){
-    for (int i = 0; i < 5; i++)
+    for (int i = 0; i < 6; i++)
     {
         if (strcmp(arg,cli_args[i].arg) == 0)
         {
@@ -179,6 +269,9 @@ void parse_args(char* arg, char* task){
                 break;
             case 5:
                 help();
+                break;
+            case 6:
+                search_task(task);
                 break;
             default:
                 break;
