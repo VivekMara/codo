@@ -3,3 +3,4 @@ codo.exe
 *.o
 *.exe
 *.out
+*.db
