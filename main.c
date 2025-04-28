@@ -24,7 +24,7 @@ CLI_Argument cli_args[] = {
     {3,"list", "List all tasks"},
     {4,"complete", "Mark a task as done"},
     {5,"help", "Show available commands"},
-    {6,"search", "Search tasks using a keyword"}                 
+    {6,"search", "Search tasks using a keyword"}
 };
 
 unsigned long long generate_uid(){
